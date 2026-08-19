@@ -1,0 +1,105 @@
+{
+  "id": "cbcaf349-3806-4cd4-9d80-fa0d560290c5",
+  "deploymentId": "9a8cb780-9ed2-487b-833f-0934f776b416",
+  "totalDurationMs": 865838,
+  "csarRetrievalMs": 5,
+  "toscaParsingMs": 2161,
+  "dependencyGraphMs": 66,
+  "pipelineGenerationMs": 0,
+  "infrastructureMs": 855914,
+  "applicationMs": 7159,
+  "stagesDetail": {
+    "k8s/adminer/": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 1271
+      }
+    ],
+    "k8s/adminer-service/": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 327
+      }
+    ],
+    "k8s/backend/": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 982
+      }
+    ],
+    "k8s/backend-service/": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 372
+      }
+    ],
+    "k8s/db/": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 2501
+      }
+    ],
+    "k8s/db-service/": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 399
+      }
+    ],
+    "k8s/proxy/": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 1303
+      }
+    ],
+    "k8s/proxy-service/": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 304
+      }
+    ],
+    "live/oci/cluster": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 483733
+      },
+      {
+        "operation": "Standard.configure",
+        "durationMs": 23668
+      },
+      {
+        "operation": "Standard.start",
+        "durationMs": 0
+      }
+    ],
+    "live/oci/network": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 46292
+      },
+      {
+        "operation": "Standard.configure",
+        "durationMs": 37674
+      },
+      {
+        "operation": "Standard.start",
+        "durationMs": 0
+      }
+    ],
+    "live/oci/node-pool": [
+      {
+        "operation": "Standard.create",
+        "durationMs": 244469
+      },
+      {
+        "operation": "Standard.configure",
+        "durationMs": 20078
+      },
+      {
+        "operation": "Standard.start",
+        "durationMs": 0
+      }
+    ]
+  },
+  "createdAt": 1785696009.896488000,
+  "totalDurationFormatted": "14.3m"
+}

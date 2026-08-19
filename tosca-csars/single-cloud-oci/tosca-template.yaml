@@ -2,20 +2,65 @@ tosca_definitions_version: tosca_2_0
 imports:
 - profile: org.tosca.cna:1.0.0
 - profile: org.tosca.cna.oci.k8s:1.0.0
+
 metadata:
-  template_name: oke-full-stack
+  template_name: oke-traefik-stack
   template_author: admin
   template_license: Apache-2.0
   template_version: 2.0.0
-description: "Full-stack deployment on OKE using CNA Profile 2.0:\nInfrastructure \
-  \ (VCN, OKECluster, OKENodePool) \n+ Applications (PostgreSQL, Tomcat backend, Nginx\
-  \ frontend).\n"
+
+description: "Full-stack deployment on OKE using CNA Profile 2.0:\nInfrastructure (VCN, OKECluster, OKENodePool)\n+ Applications (Traefik Proxy, Postgres 18, Adminer, Backend).\n"
+
 service_template:
   inputs:
     env_name:
       type: string
       default: dev
       description: Environment name used as prefix for all resources
+    domain:
+      type: string
+      default: localhost
+      description: Base domain name for routing rules
+    compartment_ocid:
+      type: string
+      description: OCID of the OCI compartment
+    postgres_password:
+      type: string
+      description: PostgreSQL superuser password
+    project_name:
+      type: string
+      default: myapp
+      description: Project name for backend environment
+    secret_key:
+      type: string
+      description: Application secret key
+    first_superuser:
+      type: string
+      default: admin@example.com
+      description: Initial superuser email
+    first_superuser_password:
+      type: string
+      description: Initial superuser password
+    smtp_host:
+      type: string
+      default: ""
+      description: SMTP host configuration
+    smtp_user:
+      type: string
+      default: ""
+      description: SMTP username
+    smtp_password:
+      type: string
+      default: ""
+      description: SMTP password
+    emails_from_email:
+      type: string
+      default: ""
+      description: Sender email address
+    sentry_dsn:
+      type: string
+      default: ""
+      description: Sentry error tracking DSN
     node_ocpus:
       type: integer
       default: 2
@@ -24,30 +69,6 @@ service_template:
       type: string
       default: VM.Standard.A1.Flex
       description: OCI instance shape for worker nodes
-    nginx_image:
-      type: string
-      default: nginx:1.25
-      description: Nginx Docker image
-    postgres_db:
-      type: string
-      default: appdb
-      description: Default database name to create
-    source_type:
-      type: string
-      default: IMAGE
-      description: Image source type
-    tomcat_port:
-      type: integer
-      default: 8080
-      description: Tomcat HTTP port
-    tomcat_image:
-      type: string
-      default: tomcat:9.0-jdk17
-      description: Tomcat Docker image
-    nginx_replicas:
-      type: integer
-      default: 2
-      description: Number of Nginx frontend replicas
     node_memory_gb:
       type: integer
       default: 16
@@ -58,22 +79,12 @@ service_template:
       description: Number of worker nodes in the pool
     ssh_public_key:
       type: string
+      default: ""
       description: SSH public key for worker nodes
-    compartment_ocid:
-      type: string
-      description: OCID of the OCI compartment
-    postgres_password:
-      type: string
-      default: changeme
-      description: PostgreSQL superuser password
     kubernetes_version:
       type: string
       default: v1.28.3
       description: "OKE Kubernetes version (e.g., \"v1.28.3\")"
-    availability_domain:
-      type: string
-      default: ""
-      description: "OCI availability domain (e.g., \"Uocm:SA-SAOPAULO-1-AD-1\")"
     distribution:
       type: string
       default: OKE
@@ -82,6 +93,7 @@ service_template:
       type: string
       default: "1.28.3"
       description: "Kubernetes distribution version"
+
   outputs:
     cluster_id:
       value:
@@ -93,161 +105,29 @@ service_template:
         $get_attribute:
         - oke_cluster
         - kubeconfig
-    node_pool_id:
+    proxy_endpoint:
       value:
         $get_attribute:
-        - oke_node_pool
-        - node_pool_id
-    nginx_endpoint:
-      value:
-        $get_attribute:
-        - nginx_service
+        - proxy_service
         - load_balancer_ip
-    tomcat_endpoint:
+    backend_endpoint:
       value:
         $concat:
         - $get_input: env_name
-        - -tomcat:8080
-    cluster_endpoint:
-      value:
-        $get_attribute:
-        - oke_cluster
-        - endpoint
-    postgres_endpoint:
+        - -backend:8000
+    db_endpoint:
       value:
         $concat:
         - $get_input: env_name
-        - -postgres:5432
-    nodes_allocation_status:
+        - -db:5432
+    adminer_endpoint:
       value:
-        $get_attribute:
-        - oke_node_pool
-        - generated_nodes
+        $concat:
+        - $get_input: env_name
+        - -adminer:8080
+
   node_templates:
-    nginx:
-      type: cloud_native.nodes.Service
-      artifacts:
-        kubernetes_manifest:
-          file: k8s/nginx/
-          type: cloud_native.artifacts.Deployment.KubernetesManifest
-      properties:
-        config_map:
-          default.conf: |
-            server {
-                listen 80;
-                server_name _;
-
-                location / {
-                    root /usr/share/nginx/html;
-                    index index.html;
-                }
-
-                location /api/ {
-                    proxy_pass http://${env_name}-tomcat:8080/;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
-
-                location /health {
-                    return 200 'OK';
-                    add_header Content-Type text/plain;
-                }
-            }
-        containers:
-        - name: nginx
-          image:
-            $get_input: nginx_image
-          ports:
-          - container_port: 80
-          resources:
-            cpu_min: 100m
-            mem_min: 128Mi
-        scalability:
-          default_instances:
-            $get_input: nginx_replicas
-        finops:
-          application: webapp
-          environment: dev
-          team: platform
-          cost_center: engineering
-          managed_via: tosca
-        env_vars:
-          NODE_ENV: production
-        config_files: {}
-        scheduling_requirements: []
-      requirements:
-      - backend:
-          node: tomcat_service
-          relationship: tosca.relationships.ConnectsTo
-      - host:
-          node: oke_node_pool
-          relationship:
-            type: tosca.relationships.HostedOn
-            properties:
-              target_node_instance:
-                $get_attribute:
-                - oke_node_pool
-                - generated_nodes
-                - 1
-                - name
-    tomcat:
-      type: cloud_native.nodes.Service
-      artifacts:
-        kubernetes_manifest:
-          file: k8s/tomcat/
-          type: cloud_native.artifacts.Deployment.KubernetesManifest
-      properties:
-        containers:
-        - env:
-            DATABASE_URL:
-              $concat:
-              - jdbc:postgresql://
-              - $get_input: env_name
-              - -postgres:5432/
-              - $get_input: postgres_db
-            DATABASE_USER: postgres
-            DATABASE_PASSWORD:
-              $get_input: postgres_password
-          name: tomcat
-          image:
-            $get_input: tomcat_image
-          ports:
-          - container_port:
-              $get_input: tomcat_port
-          resources:
-            cpu_max: 1000m
-            cpu_min: 250m
-            mem_max: 1Gi
-            mem_min: 512Mi
-        scalability:
-          default_instances: 2
-        finops:
-          application: webapp
-          environment: dev
-          team: platform
-          cost_center: engineering
-          managed_via: tosca
-        env_vars:
-          CATALINA_OPTS: "-Xms512m -Xmx1024m"
-        config_files: {}
-        scheduling_requirements: []
-      requirements:
-      - database:
-          node: postgres_service
-          relationship: tosca.relationships.ConnectsTo
-      - host:
-          node: oke_node_pool
-          relationship:
-            type: tosca.relationships.HostedOn
-            properties:
-              target_node_instance:
-                $get_attribute:
-                - oke_node_pool
-                - generated_nodes
-                - 0
-                - name
+    # --- Infrastructure ---
     oke_vcn:
       type: cloud_native.nodes.oci.OCINetwork
       artifacts:
@@ -262,53 +142,7 @@ service_template:
           - -vcn
         compartment_id:
           $get_input: compartment_ocid
-    postgres:
-      type: cloud_native.nodes.StorageBackingService
-      artifacts:
-        kubernetes_manifest:
-          file: k8s/postgres/
-          type: cloud_native.artifacts.Deployment.KubernetesManifest
-      properties:
-        containers:
-        - env:
-            POSTGRES_DB:
-              $get_input: postgres_db
-            POSTGRES_PASSWORD:
-              $get_input: postgres_password
-          name:
-            $concat:
-            - $get_input: env_name
-            - -postgres
-          image: postgres:9.6
-          ports:
-          - container_port: 5432
-          resources:
-            cpu_min: 250m
-            mem_min: 512Mi
-        scalability:
-          default_instances: 1
-        finops:
-          application: webapp
-          environment: dev
-          team: platform
-          cost_center: engineering
-          managed_via: tosca
-        env_vars:
-          PGDATA: /var/lib/postgresql/data/pgdata
-        config_files: {}
-        scheduling_requirements: []
-      requirements:
-      - host:
-          node: oke_node_pool
-          relationship:
-            type: tosca.relationships.HostedOn
-            properties:
-              target_node_instance:
-                $get_attribute:
-                - oke_node_pool
-                - generated_nodes
-                - 0
-                - name
+
     oke_cluster:
       type: cloud_native.nodes.oci.OKECluster
       artifacts:
@@ -339,32 +173,12 @@ service_template:
           cost_center: engineering
           managed_via: tosca
           provider: oci
-          region: us-ashburn-1
+          region: sa-saopaulo-1
       requirements:
       - network:
           node: oke_vcn
           relationship: tosca.relationships.DependsOn
-    nginx_service:
-      type: cloud_native.nodes.Kubernetes.NetworkService
-      artifacts:
-        kubernetes_manifest:
-          file: k8s/nginx-service/
-          type: cloud_native.artifacts.Deployment.KubernetesManifest
-      properties:
-        name:
-          $concat:
-          - $get_input: env_name
-          - -nginx
-        port_mappings:
-        - port: 80
-          target_port: 80
-          protocol: TCP
-        service_type: LoadBalancer
-        exposure_type: external
-      requirements:
-      - feature:
-          node: nginx
-          relationship: tosca.relationships.RoutesTo
+
     oke_node_pool:
       type: cloud_native.nodes.oci.OKENodePool
       artifacts:
@@ -393,40 +207,132 @@ service_template:
       - cluster:
           node: oke_cluster
           relationship: cloud_native.relationships.ManagedBy
-    tomcat_service:
+
+    # --- Services ---
+
+    # 1. Traefik Proxy
+    proxy:
+      type: cloud_native.nodes.Service
+      artifacts:
+        kubernetes_manifest:
+          file: k8s/proxy/
+          type: cloud_native.artifacts.Deployment.KubernetesManifest
+      properties:
+        containers:
+        - name: proxy
+          image: traefik:3.6
+          ports:
+          - container_port: 80
+          resources:
+            cpu_min: 100m
+            mem_min: 128Mi
+        scalability:
+          default_instances: 1
+        finops:
+          application: webapp
+          environment: dev
+          team: platform
+          cost_center: engineering
+          managed_via: tosca
+        env_vars:
+          TRAEFIK_PROVIDERS_DOCKER: "true"
+          TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT: "false"
+          TRAEFIK_ENTRYPOINTS_HTTP_ADDRESS: ":80"
+          TRAEFIK_ACCESSLOG: "true"
+          TRAEFIK_LOG: "true"
+        config_files: {}
+        scheduling_requirements: []
+      requirements:
+      - host:
+          node: oke_node_pool
+          relationship:
+            type: tosca.relationships.HostedOn
+            properties:
+              target_node_instance:
+                $get_attribute:
+                - oke_node_pool
+                - generated_nodes
+                - 0
+                - name
+
+    proxy_service:
       type: cloud_native.nodes.Kubernetes.NetworkService
       artifacts:
         kubernetes_manifest:
-          file: k8s/tomcat-service/
+          file: k8s/proxy-service/
           type: cloud_native.artifacts.Deployment.KubernetesManifest
       properties:
         name:
           $concat:
           - $get_input: env_name
-          - -tomcat
+          - -proxy
         port_mappings:
-        - port:
-            $get_input: tomcat_port
-          target_port:
-            $get_input: tomcat_port
+        - port: 80
+          target_port: 80
           protocol: TCP
-        service_type: ClusterIP
-        exposure_type: internal
+        service_type: LoadBalancer
+        exposure_type: external
       requirements:
       - feature:
-          node: tomcat
+          node: proxy
           relationship: tosca.relationships.RoutesTo
-    postgres_service:
+
+    # 2. Database (PostgreSQL 18)
+    db:
+      type: cloud_native.nodes.StorageBackingService
+      artifacts:
+        kubernetes_manifest:
+          file: k8s/db/
+          type: cloud_native.artifacts.Deployment.KubernetesManifest
+      properties:
+        containers:
+        - name: db
+          image: postgres:18
+          env:
+            POSTGRES_PASSWORD:
+              $get_input: postgres_password
+            POSTGRES_DB: app
+          ports:
+          - container_port: 5432
+          resources:
+            cpu_min: 250m
+            mem_min: 512Mi
+        scalability:
+          default_instances: 1
+        finops:
+          application: webapp
+          environment: dev
+          team: platform
+          cost_center: engineering
+          managed_via: tosca
+        env_vars:
+          PGDATA: /var/lib/postgresql/data
+        config_files: {}
+        scheduling_requirements: []
+      requirements:
+      - host:
+          node: oke_node_pool
+          relationship:
+            type: tosca.relationships.HostedOn
+            properties:
+              target_node_instance:
+                $get_attribute:
+                - oke_node_pool
+                - generated_nodes
+                - 0
+                - name
+
+    db_service:
       type: cloud_native.nodes.Kubernetes.NetworkService
       artifacts:
         kubernetes_manifest:
-          file: k8s/postgres-service/
+          file: k8s/db-service/
           type: cloud_native.artifacts.Deployment.KubernetesManifest
       properties:
         name:
           $concat:
           - $get_input: env_name
-          - -postgres
+          - -db
         port_mappings:
         - port: 5432
           target_port: 5432
@@ -435,6 +341,169 @@ service_template:
         exposure_type: internal
       requirements:
       - feature:
-          node: postgres
+          node: db
           relationship: tosca.relationships.RoutesTo
 
+    # 3. Adminer
+    adminer:
+      type: cloud_native.nodes.Service
+      artifacts:
+        kubernetes_manifest:
+          file: k8s/adminer/
+          type: cloud_native.artifacts.Deployment.KubernetesManifest
+      properties:
+        containers:
+        - name: adminer
+          image: adminer
+          env:
+            ADMINER_DESIGN: pepa-linha-dark
+          ports:
+          - container_port: 8080
+          resources:
+            cpu_min: 100m
+            mem_min: 128Mi
+        scalability:
+          default_instances: 1
+        finops:
+          application: webapp
+          environment: dev
+          team: platform
+          cost_center: engineering
+          managed_via: tosca
+        env_vars:
+          TRAEFIK_ENABLE: "true"
+          TRAEFIK_HTTP_SERVICES_ADMINER_LOADBALANCER_SERVER_PORT: "8080"
+          TRAEFIK_HTTP_ROUTERS_ADMINER_HTTP_ENTRYPOINTS: "http"
+        config_files: {}
+        scheduling_requirements: []
+      requirements:
+      - database:
+          node: db_service
+          relationship: tosca.relationships.ConnectsTo
+      - host:
+          node: oke_node_pool
+          relationship:
+            type: tosca.relationships.HostedOn
+            properties:
+              target_node_instance:
+                $get_attribute:
+                - oke_node_pool
+                - generated_nodes
+                - 1
+                - name
+
+    adminer_service:
+      type: cloud_native.nodes.Kubernetes.NetworkService
+      artifacts:
+        kubernetes_manifest:
+          file: k8s/adminer-service/
+          type: cloud_native.artifacts.Deployment.KubernetesManifest
+      properties:
+        name:
+          $concat:
+          - $get_input: env_name
+          - -adminer
+        port_mappings:
+        - port: 8080
+          target_port: 8080
+          protocol: TCP
+        service_type: ClusterIP
+        exposure_type: internal
+      requirements:
+      - feature:
+          node: adminer
+          relationship: tosca.relationships.RoutesTo
+
+    # 4. Backend
+    backend:
+      type: cloud_native.nodes.Service
+      artifacts:
+        kubernetes_manifest:
+          file: k8s/backend/
+          type: cloud_native.artifacts.Deployment.KubernetesManifest
+      properties:
+        containers:
+        - name: backend
+          image: backend:latest
+          env:
+            PROJECT_NAME:
+              $get_input: project_name
+            SECRET_KEY:
+              $get_input: secret_key
+            FIRST_SUPERUSER:
+              $get_input: first_superuser
+            FIRST_SUPERUSER_PASSWORD:
+              $get_input: first_superuser_password
+            SMTP_HOST:
+              $get_input: smtp_host
+            SMTP_USER:
+              $get_input: smtp_user
+            SMTP_PASSWORD:
+              $get_input: smtp_password
+            EMAILS_FROM_EMAIL:
+              $get_input: emails_from_email
+            DATABASE_URL:
+              $concat:
+              - postgresql://postgres:
+              - $get_input: postgres_password
+              - "@"
+              - $get_input: env_name
+              - -db:5432/app
+            SENTRY_DSN:
+              $get_input: sentry_dsn
+          ports:
+          - container_port: 8000
+          resources:
+            cpu_min: 250m
+            mem_min: 512Mi
+        scalability:
+          default_instances: 2
+        finops:
+          application: webapp
+          environment: dev
+          team: platform
+          cost_center: engineering
+          managed_via: tosca
+        env_vars:
+          TRAEFIK_ENABLE: "true"
+          TRAEFIK_HTTP_SERVICES_BACKEND_LOADBALANCER_SERVER_PORT: "8000"
+          TRAEFIK_HTTP_ROUTERS_BACKEND_HTTP_ENTRYPOINTS: "http"
+        config_files: {}
+        scheduling_requirements: []
+      requirements:
+      - database:
+          node: db_service
+          relationship: tosca.relationships.ConnectsTo
+      - host:
+          node: oke_node_pool
+          relationship:
+            type: tosca.relationships.HostedOn
+            properties:
+              target_node_instance:
+                $get_attribute:
+                - oke_node_pool
+                - generated_nodes
+                - 0
+                - name
+
+    backend_service:
+      type: cloud_native.nodes.Kubernetes.NetworkService
+      artifacts:
+        kubernetes_manifest:
+          file: k8s/backend-service/
+          type: cloud_native.artifacts.Deployment.KubernetesManifest
+      properties:
+        name:
+          $concat:
+          - $get_input: env_name
+          - -backend
+        port_mappings:
+        - port: 8000
+          target_port: 8000
+          protocol: TCP
+        service_type: ClusterIP
+        exposure_type: internal
+      requirements:
+      - feature:
+          node: backend
+          relationship: tosca.relationships.RoutesTo
