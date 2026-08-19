@@ -31,4 +31,4 @@ It is structured as follows:
 
 ## LICENSE
 
-MIT LICENSE.
+[MIT LICENSE](LICENSE).
