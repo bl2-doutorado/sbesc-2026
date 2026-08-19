@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  labels:
+    app.kubernetes.io/name: proxy
+    app.kubernetes.io/component: ingress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy
+  template:
+    metadata:
+      labels:
+        app: proxy
+    spec:
+      containers:
+      - name: proxy
+        image: traefik:3.6
+        args:
+          - --providers.docker=false
+          - --providers.kubernetesingress=true
+          - --entrypoints.http.address=:80
+          - --accesslog
+          - --log
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi

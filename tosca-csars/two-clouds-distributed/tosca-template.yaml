@@ -9,7 +9,7 @@ metadata:
   template_license: Apache-2.0
   template_version: 2.0.0
 
-description: "Full-stack deployment on OKE using CNA Profile 2.0\n"
+description: "Full-stack deployment on OKE and GKE using CNA Profile 2.0\n"
 
 service_template:
   inputs:
@@ -95,11 +95,15 @@ service_template:
       description: "Kubernetes distribution version"
 
   outputs:
-    cluster_id:
-      value:
-        $get_attribute:
-        - oke_cluster
-        - cluster_id
+    cluster_ids:
+      - value:
+          $get_attribute:
+          - oke_cluster
+          - cluster_id
+      - value:
+          $get_attribute:
+          - gke_cluster
+          - cluster_id
     kubeconfig:
       value:
         $get_attribute:
@@ -173,7 +177,6 @@ service_template:
           cost_center: engineering
           managed_via: tosca
           provider: oci
-          region: sa-saopaulo-1
       requirements:
       - network:
           node: oke_vcn
@@ -208,6 +211,94 @@ service_template:
           node: oke_cluster
           relationship: cloud_native.relationships.ManagedBy
 
+    gcp_vpc:
+      type: cloud_native.nodes.gcp.GCPVPCNetwork
+      artifacts:
+        terraform_module:
+          file: live/gcp/network
+          type: tosca.artifacts.Implementation
+      properties:
+        cidr_block: 10.0.0.0/16
+        network_name:
+          $concat:
+          - $get_input: env_name
+          - vpc
+        auto_create_subnetworks: false
+        routing_mode: REGIONAL
+    gke_cluster:
+      type: cloud_native.nodes.gcp.GKECluster
+      artifacts:
+        terraform_module:
+          file: live/gcp/cluster
+          type: tosca.artifacts.Implementation
+      properties:
+        network:
+          $concat:
+          - $get_input: env_name
+          - vpc
+        cluster_name:
+          $concat:
+          - $get_input: env_name
+          - cluster
+        project_id:
+          $get_input: project_id
+        region:
+          $get_input: region
+        zone:
+          $get_input: zone
+        kubernetes_version:
+          $get_input: kubernetes_version
+        release_channel:
+          $get_input: release_channel
+        distribution:
+          $get_input: distribution
+        distribution_version:
+          $get_input: distribution_version
+        enable_vertical_pod_autoscaling: true
+        logging_service: logging.googleapis.com/kubernetes
+        monitoring_service: monitoring.googleapis.com/kubernetes
+        finops:
+          application: webapp
+          environment: dev
+          team: platform
+          cost_center: engineering
+          managed_via: tosca
+          provider: gcp
+          region: us-central1
+      requirements:
+      - network:
+          node: gcp_vpc
+          relationship: tosca.relationships.DependsOn
+    
+    gke_node_pool:
+      type: cloud_native.nodes.gcp.GKENodePool
+      artifacts:
+        terraform_module:
+          file: live/gcp/node-pool
+          type: tosca.artifacts.Implementation
+      properties:
+        machine_type:
+          $get_input: machine_type
+        disk_size_gb:
+          $get_input: disk_size_gb
+        node_count:
+          $get_input: node_pool_size
+        node_pool_name:
+          $concat:
+          - $get_input: env_name
+          - pool
+        ssh_public_key:
+          $get_input: ssh_public_key
+        auto_repair: true
+        auto_upgrade: true
+        preemptible: false
+        labels:
+          env: dev
+          team: platform
+      requirements:
+      - cluster:
+          node: gke_cluster
+          relationship: cloud_native.relationships.ManagedBy
     # --- Services ---
 
     # 1. Traefik Proxy
@@ -244,13 +335,13 @@ service_template:
         scheduling_requirements: []
       requirements:
       - host:
-          node: oke_node_pool
+          node: gke_node_pool
           relationship:
             type: tosca.relationships.HostedOn
             properties:
               target_node_instance:
                 $get_attribute:
-                - oke_node_pool
+                - gke_node_pool
                 - generated_nodes
                 - 0
                 - name

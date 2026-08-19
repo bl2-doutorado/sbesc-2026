@@ -16,13 +16,13 @@ It is structured as follows:
 
 ```
 .
-<!-- ├── benchmarks/                           # Raw benchmark data and logs -->
 └── README.md                             # This document
 └── tosca-csars                           # TOSCA CSARs used in the experiments
     ├── single-cloud-oci
     ├── two-clouds-distributed
     └── two-clouds-mirrored
 └── experiment-results                    # Results of the experiments
+    ├── single-cloud-oci
     ├── two-clouds-distributed
     └── two-clouds-mirrored
 
