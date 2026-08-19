@@ -1,73 +1,34 @@
 ﻿# SBESC 2026 - Multi-cloud Intent-based TOSCA Orchestrator
 
-
-
 ## 🌱 About the Repository
 
-This repository contains the experimental results obtained from the study described in the paper "MITO: A Multicloud Intent-Driven TOSCA Orchestrator for FinOps- and GreenOps-Aware Kubernetes Deployments", submitted to SBESC 2026. It is structured as follows:
+This repository contains the experimental results obtained from the study described in the paper "MITO: A Multicloud Intent-Driven TOSCA Orchestrator for FinOps- and GreenOps-Aware Kubernetes Deployments", submitted to SBESC 2026. 
+
+## Paper abstract
+
+Topology and Orchestration Specification for Cloud Applications (TOSCA) has long been used to describe cloud application topologies and their deployment requirements, but practical multicloud execution still requires substantial engineering to bridge declarative models, optimization decisions, and provider-specific provisioning steps. In previous work, an extended TOSCA profile for FinOps and GreenOps was introduced, along with G-FinOps, an application that uses an Mixed-Integer Linear Programming (MILP) formulation demonstrating the feasibility of multicloud optimization, gererating TOSCA artifacts that can be used to deploy the applications on cloud. However, the internal orchestration engine responsible for operationalizing those ideas remained a black box. This paper fills that gap by presenting MITO, the Multicloud Intent-driven TOSCA Orchestrator, a runtime engine that transforms declarative TOSCA specifications into coordinated Terraform and Helm executions across managed Kubernetes clusters across multiple cloud providers. MITO is integrated with G-FinOps, where an OR-Tools-based MILP optimizer selects providers, placement strategies, machine models, and replica distributions under cost, availability, and carbon-aware objectives. The orchestrator then consumes the resulting Cloud Service Archive (CSAR) release, translates it into executable infrastructure and workload artifacts, maintains state through a reconciliation loop, and supports periodic drift correction, reoptimization, and auto-healing. This paper details the architecture, execution workflow, plugin-based backend abstraction, and GitOps-inspired state management of MITO, positioning it as a practical runtime realization of intent-driven TOSCA orchestration for FinOps- and GreenOps-aware multicloud deployments.
+
+
+## Repository structure
+
+It is structured as follows:
 
 
 ```
 .
-├── benchmarks/                           # Raw benchmark data and logs
+<!-- ├── benchmarks/                           # Raw benchmark data and logs -->
 └── README.md                             # This document
 └── tosca-csars                           # TOSCA CSARs used in the experiments
     ├── single-cloud-oci
+    ├── two-clouds-distributed
+    └── two-clouds-mirrored
+└── experiment-results                    # Results of the experiments
     ├── two-clouds-distributed
     └── two-clouds-mirrored
 
 ```
 
 
-# Título projeto
+## LICENSE
 
-Resumo descrevendo o objetivo do artefato, com o respectivo título e resumo do artigo.
-
-# Estrutura do readme.md
-
-Apresenta a estrutura do readme.md, descrevendo como o repositório está organizado.
-
-# Selos Considerados
-
-Os autores devem descrever quais selos devem ser considerados no processo de avaliação. Como por exemplo: ``Os selos considerados são: Disponíveis e Funcionais.''
-
-# Informações básicas
-
-Esta seção deve apresentar informações básicas de todos os componentes necessários para a execução e replicação dos experimentos.
-Descrevendo todo o ambiente de execução, com requisitos de hardware e software.
-
-# Dependências
-
-Informações relacionadas a benchmarks utilizados e dependências para a execução devem ser descritas nesta seção.
-Busque deixar o mais claro possível, apresentando informações como versões de dependências e processos para acessar recursos de terceiros caso necessário.
-
-# Preocupações com segurança
-
-Caso a execução do artefato ofereça algum tipo de risco para os avaliadores. Este risco deve ser descrito e o processo adequado para garantir a segurança dos revisores deve ser apresentado.
-
-# Instalação
-
-O processo de baixar e instalar a aplicação deve ser descrito nesta seção. Ao final deste processo já é esperado que a aplicação/benchmark/ferramenta consiga ser executada.
-
-# Teste mínimo
-
-Esta seção deve apresentar um passo a passo para a execução de um teste mínimo.
-Um teste mínimo de execução permite que os revisores consigam observar algumas funcionalidades do artefato.
-Este teste é útil para a identificação de problemas durante o processo de instalação.
-
-# Experimentos
-
-Esta seção deve descrever um passo a passo para a execução e obtenção dos resultados do artigo. Permitindo que os revisores consigam alcançar as reivindicações apresentadas no artigo.
-Cada reivindicações deve ser apresentada em uma subseção, com detalhes de arquivos de configurações a serem alterados, comandos a serem executados, flags a serem utilizadas, tempo esperado de execução, expectativa de recursos a serem utilizados como 1GB RAM/Disk e resultado esperado.
-
-Caso o processo para a reprodução de todos os experimentos não seja possível em tempo viável. Os autores devem escolher as principais reivindicações apresentadas no artigo e apresentar o respectivo processo para reprodução.
-
-## Reivindicações #X
-
-## Reivindicações #Y
-
-# LICENSE
-
-Apresente a licença.
-
-
+MIT LICENSE.
